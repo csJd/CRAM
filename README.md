@@ -1,6 +1,5 @@
-# An Implementation of Deep Exhaustive Model for Nested NER
+# Source code of Neural Multi-task Model for Nested NER
 
-Original paper: [Deep Exhaustive model, Soharb and Miwa (2018 EMNLP)](http://aclweb.org/anthology/D18-1309)
 
 # Requirements
 * `python 3`
