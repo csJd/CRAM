@@ -6,6 +6,7 @@ from utils.torch_util import set_random_seed
 RANDOM_SEED = 233
 set_random_seed(RANDOM_SEED)
 
+import os
 import torch
 import json
 import torch.nn.functional as F
@@ -49,13 +50,13 @@ def train_end2end(n_epochs=30,
                   bsl_model_url=None,
                   gamma=0.6,
                   device='auto',
-                  save_model=False
+                  save_only_best=True
                   ):
-    """ Train deep exhaustive model
+    """ Train deep exhaustive model, trained best model will be saved at 'data/model/'
 
     Args:
         n_epochs: number of epochs
-        embedding_url: url to pretrained embedding file, set as None to use random embedding
+        embedding_url: url to pre-trained embedding file, set as None to use random embedding
         char_feat_dim: size of character level feature
         freeze: whether to freeze embedding
         train_url: url to train data
@@ -68,7 +69,7 @@ def train_end2end(n_epochs=30,
         bsl_model_url: pre-trained sequence labeler url
         gamma: percentage of region classification module loss in total loss
         device: device for torch
-        save_model: whether to save trained model
+        save_only_best: only save model of best performance
     """
 
     # print arguments
@@ -99,13 +100,14 @@ def train_end2end(n_epochs=30,
     else:
         print("using cpu\n")
     model = model.to(device)
+    bsl_model = torch.load(bsl_model_url) if bsl_model_url else None
 
     criterion = F.cross_entropy
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     cnt = 0
     max_f1, max_f1_epoch = 0, 0
-    tag_weights = torch.Tensor(TAG_WEIGHTS[:6]).to(device)
+    best_model_url = None
     for epoch in range(n_epochs):
         # switch to train mode
         model.train()
@@ -113,7 +115,7 @@ def train_end2end(n_epochs=30,
         for data, sentence_labels, region_labels in train_loader:
             optimizer.zero_grad()
             pred_region_labels, pred_sentence_labels = model.forward(*data, sentence_labels)
-            classification_loss = criterion(pred_region_labels, region_labels, weight=tag_weights)
+            classification_loss = criterion(pred_region_labels, region_labels)
             bsl_loss = criterion(pred_sentence_labels, sentence_labels)
             if bsl_model_url:
                 # train condition region classifier alone
@@ -132,18 +134,20 @@ def train_end2end(n_epochs=30,
                       (epoch, batch_id, loss.item(), datetime.now().strftime("%X")))
             batch_id += 1
 
-        bsl_model = torch.load(bsl_model_url) if bsl_model_url else None
         cnt += 1
         # evaluating model use development dataset or and additional test dataset
         precision, recall, f1 = evaluate_e2e(model, dev_url, bsl_model).values()
         if f1 > max_f1:
             max_f1, max_f1_epoch = f1, epoch
             name = 'split' if bsl_model else 'end2end'
-            if save_model and f1 > 0:
-                torch.save(model, from_project_root("data/model/%s_model_epoch%d_%f.pt" % (name, epoch, f1)))
+            if save_only_best and best_model_url:
+                os.remove(best_model_url)
+            best_model_url = from_project_root("data/model/%s_model_epoch%d_%f.pt" % (name, epoch, f1))
+            torch.save(model, best_model_url)
             cnt = 0
-        if test_url:
-            evaluate_e2e(model, test_url, bsl_model)
+
+        # if test_url:
+        #     evaluate_e2e(model, test_url, bsl_model)
 
         print("maximum of f1 value: %.6f, in epoch #%d" % (max_f1, max_f1_epoch))
         print("training time:", str(datetime.now() - start_time).split('.')[0])
@@ -151,6 +155,12 @@ def train_end2end(n_epochs=30,
 
         if cnt >= early_stop > 0:
             break
+
+    if test_url:
+        best_model = torch.load(best_model_url)
+        print("best model url:", best_model_url)
+        print("evaluating on test dataset:", test_url)
+        evaluate_e2e(best_model, test_url, bsl_model)
 
     print(arguments)
 
