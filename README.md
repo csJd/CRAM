@@ -2,8 +2,8 @@
 
 
 # Requirements
-* `python 3`
-* `ptorch`
+* `python3`
+* `pytorch`
 * `numpy`
 * `gensim`
 * `scikit-learn`
