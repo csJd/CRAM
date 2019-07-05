@@ -2,6 +2,7 @@
 test.py
 result/
 logs/
+.vscode/
 
 # pycharm IDE files
 .idea/
