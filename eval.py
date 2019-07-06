@@ -158,13 +158,16 @@ def predict_on_iob2(model, iob_url):
             save_file.write(' '.join(sentence) + '\n')
             save_file.write("length = {} \n".format(len(sentence)))
             save_file.write("Gold records: {}\n".format(str(records)))
-            # print(predict(model, [sentence]))
-            sentence_labels, sentence_records, length =\
-                list(zip(*predict(model, [sentence])))[0]
+            try:
+                sentence_labels, sentence_records, length =\
+                    list(zip(*predict(model, [sentence])))[0]
+            except RuntimeError as re:
+                sentence_labels, sentence_records, length = "None", "None", len(sentence)
             save_file.write("Pred binary labels: {}\n".format(str(sentence_labels)))
             save_file.write("Pred records: {}\n".format(str(sentence_records)))
-            details = str([sentence[rg[0]:rg[1]] for rg in sentence_records])
-            save_file.write("{}\n\n".format(details))
+            if sentence_records != "None":
+                details = str([sentence[rg[0]:rg[1]] for rg in sentence_records])
+                save_file.write("{}\n\n".format(details))
 
 
 def main():
