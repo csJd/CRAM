@@ -7,12 +7,14 @@ RANDOM_SEED = 233
 set_random_seed(RANDOM_SEED)
 
 import os
+import sys
 import torch
 import json
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from datetime import datetime
 
+import utils.json_util as ju
 from utils.path_util import from_project_root, exists
 from utils.torch_util import get_device
 from dataset import End2EndDataset, prepare_vocab
@@ -24,20 +26,19 @@ EARLY_STOP = 5
 LR = 0.0005
 BATCH_SIZE = 50
 MAX_GRAD_NORM = 5
-N_TAGS = 6
-TAG_WEIGHTS = [1, 1, 1, 1, 1, 1]
 FREEZE_WV = False
-LOG_PER_BATCH = 10
+LOG_PER_BATCH = 20
 
-PRETRAINED_URL = from_project_root("data/embedding/PubMed-shuffle-win-30.bin")
-EMBED_URL = from_project_root("data/genia/embeddings.npy")
+# EMBD_URL = None  # not use pre_trained embeddings
+EMBD_URL = from_project_root("data/embedding/PubMed-shuffle-win-30.bin")
+VOCAB_URL = from_project_root("data/genia/vocab.json")
 TRAIN_URL = from_project_root("data/genia/genia.train.iob2")
 DEV_URL = from_project_root("data/genia/genia.dev.iob2")
 TEST_URL = from_project_root("data/genia/genia.test.iob2")
 
 
 def train_end2end(n_epochs=30,
-                  embedding_url=EMBED_URL,
+                  embedding_url=None,
                   char_feat_dim=100,
                   freeze=FREEZE_WV,
                   train_url=TRAIN_URL,
@@ -82,15 +83,21 @@ def train_end2end(n_epochs=30,
     train_loader = DataLoader(train_set, batch_size=batch_size, drop_last=False,
                               collate_fn=train_set.collate_func)
 
+    vocab = ju.load(VOCAB_URL)
+    n_words = len(vocab)
+    char_vocab = ju.load(VOCAB_URL.replace('vocab', 'char_vocab'))
+    n_chars = len(char_vocab)
+
     model = End2EndModel(
         hidden_size=200,
         lstm_layers=1,
-        n_tags=N_TAGS,
+        n_tags=train_set.n_tags,
         char_feat_dim=char_feat_dim,
         embedding_url=embedding_url,
         bidirectional=True,
-        n_embeddings=200000,
+        n_embeddings=n_words,
         embedding_dim=200,
+        n_chars=n_chars,
         freeze=freeze
     )
 
@@ -129,10 +136,14 @@ def train_end2end(n_epochs=30,
             if clip_norm > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_norm)
             optimizer.step()
-            if batch_id % LOG_PER_BATCH == 0:
-                print("epoch #%d, batch #%d, loss: %.12f, %s" %
-                      (epoch, batch_id, loss.item(), datetime.now().strftime("%X")))
+
+            endl = '\n' if batch_id % LOG_PER_BATCH == 0 else '\r'
+            sys.stdout.write("epoch #%d, batch #%d, loss: %.6f, %s%s" %
+                             (epoch, batch_id, loss.item(), datetime.now().strftime("%X"), endl))
+            sys.stdout.flush()
             batch_id += 1
+
+        print('\n')
 
         cnt += 1
         # evaluating model use development dataset or and additional test dataset
@@ -142,7 +153,8 @@ def train_end2end(n_epochs=30,
             name = 'split' if bsl_model else 'end2end'
             if save_only_best and best_model_url:
                 os.remove(best_model_url)
-            best_model_url = from_project_root("data/model/%s_model_epoch%d_%f.pt" % (name, epoch, f1))
+            best_model_url = from_project_root(
+                "data/model/%s_model_epoch%d_%f.pt" % (name, epoch, f1))
             torch.save(model, best_model_url)
             cnt = 0
 
@@ -167,11 +179,9 @@ def train_end2end(n_epochs=30,
 
 def main():
     start_time = datetime.now()
-    if EMBED_URL and not exists(EMBED_URL):
-        # pre-trained embedding url, word2vec format
-        pretrained_url = PRETRAINED_URL
-        prepare_vocab([TRAIN_URL, DEV_URL, TEST_URL], pretrained_url, update=True, min_count=1)
-    train_end2end(test_url=TEST_URL)
+    pretrained_url = prepare_vocab([TRAIN_URL, DEV_URL, TEST_URL],
+                                   EMBD_URL, update=False, min_count=1)
+    train_end2end(test_url=TEST_URL, embedding_url=pretrained_url)
     print("finished in:", datetime.now() - start_time)
     pass
 

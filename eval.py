@@ -9,8 +9,6 @@ from dataset import End2EndDataset, gen_sentence_tensors
 from utils.torch_util import calc_f1
 from utils.path_util import from_project_root
 
-LABELS = ["NA", "DNA", "RNA", "protein", "cell_line", "cell_type"]
-
 
 def evaluate_e2e(model, data_url, bsl_model=None):
     """ evaluating end2end model on dataurl
@@ -71,7 +69,7 @@ def evaluate_e2e(model, data_url, bsl_model=None):
                 region_pred_count += len(pred_records)
 
                 for region in true_records:
-                    true_label = dataset.label_ids[true_records[region]]
+                    true_label = dataset.label_list.index(true_records[region])
                     pred_label = pred_records[region] if region in pred_records else 0
                     region_true_list.append(true_label)
                     region_pred_list.append(pred_label)
@@ -92,7 +90,7 @@ def evaluate_e2e(model, data_url, bsl_model=None):
 
         print("region classification result:")
         print(classification_report(region_true_list, region_pred_list,
-                                    target_names=list(dataset.label_ids)[:6], digits=6))
+                                    target_names=dataset.label_list, digits=6))
         ret = dict()
         tp = 0
         for pv, tv in zip(region_pred_list, region_true_list):
@@ -105,11 +103,13 @@ def evaluate_e2e(model, data_url, bsl_model=None):
     return ret
 
 
-def predict(model, sentences):
+def predict(model, sentences, labels):
     """ predict NER result for sentence list
     Args:
         model: trained model
         sentences: sentences to be predicted
+        labels: entity type list
+
     Returns:
         predicted results: ([sentence_labels], [region_labels], lengths)
     """
@@ -132,7 +132,7 @@ def predict(model, sentences):
                     if sent_labels[end - 1] == 0:
                         break
                     if pred_region_labels[ind] > 0:
-                        pred_records[(start, end)] = LABELS[pred_region_labels[ind]]
+                        pred_records[(start, end)] =  labels[pred_region_labels[ind]]
                     ind += 1
         pred_sentence_records.append(pred_records)
 
@@ -141,6 +141,7 @@ def predict(model, sentences):
 
 def predict_on_iob2(model, iob_url):
     """ predict on iob2 file and save the results
+
     Args:
         model: trained model
         iob_url: url to iob file
@@ -160,7 +161,7 @@ def predict_on_iob2(model, iob_url):
             save_file.write("Gold records: {}\n".format(str(records)))
             try:
                 sentence_labels, sentence_records, length =\
-                    list(zip(*predict(model, [sentence])))[0]
+                    list(zip(*predict(model, [sentence], test_set.label_list)))[0]
             except RuntimeError as re:
                 sentence_labels, sentence_records, length = "None", "None", len(sentence)
             save_file.write("Pred binary labels: {}\n".format(str(sentence_labels)))

@@ -13,16 +13,19 @@ from gensim.models import KeyedVectors
 import utils.json_util as ju
 from utils.path_util import from_project_root, dirname
 
-LABEL_IDS = {"neither": 0, "DNA": 1, "RNA": 2, "protein": 3, "cell_line": 4, "cell_type": 5}
-PRETRAINED_URL = from_project_root("data/embedding/PubMed-shuffle-win-30.bin")
-
 
 class End2EndDataset(Dataset):
     def __init__(self, data_url, device, evaluating=False):
         super().__init__()
         self.data_url = data_url
-        self.label_ids = LABEL_IDS
         self.sentences, self.records = load_raw_data(data_url)
+
+        labels = set()
+        for dic in self.records:
+            labels = labels.union(dic.values())
+        self.label_list = ['NA'] + sorted(labels)
+        self.n_tags = len(self.label_list)
+
         self.device = device
         self.evaluating = evaluating
 
@@ -53,7 +56,7 @@ class End2EndDataset(Dataset):
                     for end in range(start + 1, length):
                         if labels[end - 1] == 0:
                             break
-                        region_labels.append(self.label_ids[records[(start, end)]] if (start, end) in records else 0)
+                        region_labels.append(self.label_list.index(records[(start, end)]) if (start, end) in records else 0)
 
         sentence_labels = torch.LongTensor(sentence_labels).to(self.device)
         region_labels = torch.LongTensor(region_labels).to(self.device)
@@ -122,7 +125,7 @@ def gen_sentence_tensors(sentence_list, device, data_url):
     # record sentence length and padding sentences
     sentence_lengths = [len(sentence) for sentence in sentences]
     # (batch_size)
-    sentences = pad_sequence(sentences, batch_first=True).to()
+    sentences = pad_sequence(sentences, batch_first=True).to(device)
     # (batch_size, max_sent_len)
 
     return sentences, sentence_lengths, sentence_words, sentence_word_lengths, sentence_word_indices
@@ -191,6 +194,7 @@ def gen_vocab_from_data(data_urls, pretrained_url, binary=True, update=False, mi
 
     if pretrained_url is None:
         return
+
     embeddings = np.vstack([np.zeros(kvs.vector_size),  # for <pad>
                             np.random.uniform(-0.25, 0.25, kvs.vector_size),  # for <unk>
                             embeddings])
@@ -260,7 +264,7 @@ def load_raw_data(data_url, update=False):
     return sentences, records
 
 
-def prepare_vocab(data_url, pretrained_url=PRETRAINED_URL, update=True, min_count=0):
+def prepare_vocab(data_url, pretrained_url, update=True, min_count=0):
     """ prepare vocab and embedding
 
     Args:
@@ -268,18 +272,15 @@ def prepare_vocab(data_url, pretrained_url=PRETRAINED_URL, update=True, min_coun
         pretrained_url: url to pre-trained embedding file
         update: force to update
         min_count: minimum count for gen_vocab
-
+    
+    Returns:
+        str: embedding_url
     """
-    binary = pretrained_url.endswith('.bin')
-    gen_vocab_from_data(data_url, pretrained_url, binary=binary, update=update, min_count=min_count)
+    binary = pretrained_url and pretrained_url.endswith('.bin')
+    return gen_vocab_from_data(data_url, pretrained_url, binary=binary, update=update, min_count=min_count)
 
 
 def main():
-    # load_data(data_url, update=False)
-    data_urls = [from_project_root("data/genia/genia.train.iob2"),
-                 from_project_root("data/genia/genia.dev.iob2"),
-                 from_project_root("data/genia/genia.test.iob2")]
-    prepare_vocab(data_urls, update=True, min_count=1)
     pass
 
 
