@@ -89,7 +89,8 @@ class End2EndModel(nn.Module):
         # hn (n_layers * n_directions, batch_size, hidden_size)
 
         max_sent_len = sentences.shape[1]
-        unpacked, _ = nn.utils.rnn.pad_packed_sequence(out, total_length=max_sent_len, batch_first=True)
+        unpacked, _ = nn.utils.rnn.pad_packed_sequence(
+            out, total_length=max_sent_len, batch_first=True)
         # unpacked (batch_size, max_sent_len, n_hidden)
 
         # task1: binary sequence labeler
@@ -121,7 +122,9 @@ class End2EndModel(nn.Module):
         # regions = torch.cat(regions, dim=0)
         # regions: n_regions, 3*n_hidden
 
-        region_outputs = self.region_clf(regions)
+        region_outputs = []  # all not in-entity tokens, no candidate regions
+        if len(regions) > 0:
+            region_outputs = self.region_clf(regions)
         # shape of region_labels: (n_regions, n_classes)
 
         return region_outputs, sentence_outputs
@@ -205,8 +208,10 @@ class CharLSTM(nn.Module):
 
         batch_size = len(sentence_words)
         batch_char_feat = torch.nn.utils.rnn.pad_sequence(
-            [self.sent_forward(sentence_words[i], sentence_word_lengths[i], sentence_word_indices[i])
-             for i in range(batch_size)], batch_first=True)
+            [self.sent_forward(sentence_words[i], sentence_word_lengths[i],
+                               sentence_word_indices[i])
+             for i in range(batch_size)], batch_first=True
+        )
 
         return batch_char_feat
         # (batch_size, sent_len, 2 * hidden_size)

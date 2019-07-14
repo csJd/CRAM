@@ -120,6 +120,9 @@ def train_end2end(n_epochs=30,
         model.train()
         batch_id = 0
         for data, sentence_labels, region_labels in train_loader:
+            if len(region_labels) == 0:  # skip no-region cases
+                batch_id += 1
+                continue
             optimizer.zero_grad()
             pred_region_labels, pred_sentence_labels = model.forward(*data, sentence_labels)
             classification_loss = criterion(pred_region_labels, region_labels)
@@ -173,8 +176,6 @@ def train_end2end(n_epochs=30,
         print("best model url:", best_model_url)
         print("evaluating on test dataset:", test_url)
         evaluate(best_model, test_url, bsl_model)
-
-    print(arguments)
 
 
 def main():

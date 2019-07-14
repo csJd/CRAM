@@ -10,13 +10,14 @@ from utils.torch_util import calc_f1
 from utils.path_util import from_project_root
 
 
-def evaluate(model, data_url, bsl_model=None):
+def evaluate(model, data_url, bsl_model=None, batch_size=200):
     """ evaluating end2end model on dataurl
 
     Args:
         model: trained end2end model
         data_url: url to test dataset for evaluating
         bsl_model: trained binary sequence labeling model
+        batch_size: batch_size when predicting
 
     Returns:
         ret: dict of precision, recall, and f1
@@ -24,7 +25,7 @@ def evaluate(model, data_url, bsl_model=None):
     """
     print("\nevaluating model on:", data_url, "\n")
     dataset = End2EndDataset(data_url, next(model.parameters()).device, evaluating=True)
-    loader = DataLoader(dataset, batch_size=200, collate_fn=dataset.collate_func)
+    loader = DataLoader(dataset, batch_size=batch_size, collate_fn=dataset.collate_func)
     ret = {'precision': 0, 'recall': 0, 'f1': 0}
 
     sentence_true_list, sentence_pred_list = list(), list()
@@ -48,9 +49,11 @@ def evaluate(model, data_url, bsl_model=None):
                     print("all 0 tags, no evaluating this epoch")
                     return ret
 
-            # pred_region_output (n_regions, n_tags)
-            pred_region_labels = torch.argmax(pred_region_output, dim=1).view(-1).cpu()
-            # (n_regions)
+            pred_region_labels = []  # for all tokens are not in-entity
+            if len(pred_region_output) > 0:
+                # pred_region_output (n_regions, n_tags)
+                pred_region_labels = torch.argmax(pred_region_output, dim=1).view(-1).cpu()
+                # (n_regions)
 
             lengths = data[1]
             ind = 0
@@ -119,8 +122,9 @@ def predict(model, sentences, categories, data_url):
                                    data_url=from_project_root('data/genia/vocab.json'))
     pred_region_output, pred_sentence_output = model.forward(*tensors)
     pred_sentence_labels = torch.argmax(pred_sentence_output, dim=1).cpu()
-    pred_region_labels = torch.argmax(pred_region_output, dim=1).cpu()
-
+    pred_region_labels = []  # for no regions when all tokens are not in-entity
+    if len(pred_region_output) > 0:
+        pred_region_labels = torch.argmax(pred_region_output, dim=1).cpu()
     lengths = tensors[1]
     pred_sentence_records = []
 
@@ -133,7 +137,7 @@ def predict(model, sentences, categories, data_url):
                     if sent_labels[end - 1] == 0:
                         break
                     if pred_region_labels[ind] > 0:
-                        pred_records[(start, end)] =  categories[pred_region_labels[ind]]
+                        pred_records[(start, end)] = categories[pred_region_labels[ind]]
                     ind += 1
         pred_sentence_records.append(pred_records)
 
@@ -160,16 +164,14 @@ def predict_on_iob2(model, iob_url):
             save_file.write(' '.join(sentence) + '\n')
             save_file.write("length = {} \n".format(len(sentence)))
             save_file.write("Gold records: {}\n".format(str(records)))
-            try:
-                sentence_labels, sentence_records, length =\
-                    list(zip(*predict(model, [sentence], test_set.categories, iob_url)))[0]
-            except RuntimeError as re:
-                sentence_labels, sentence_records, length = "None", "None", len(sentence)
+
+            sentence_labels, sentence_records, length = \
+                list(zip(*predict(model, [sentence], test_set.categories, iob_url)))[0]
             save_file.write("Pred binary labels: {}\n".format(str(sentence_labels)))
             save_file.write("Pred records: {}\n".format(str(sentence_records)))
-            if sentence_records != "None":
-                details = str([sentence[rg[0]:rg[1]] for rg in sentence_records])
-                save_file.write("{}\n\n".format(details))
+
+            details = str([sentence[rg[0]:rg[1]] for rg in sentence_records])
+            save_file.write("{}\n\n".format(details))
 
 
 def main():
