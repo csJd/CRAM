@@ -10,7 +10,7 @@ from utils.torch_util import calc_f1
 from utils.path_util import from_project_root
 
 
-def evaluate_e2e(model, data_url, bsl_model=None):
+def evaluate(model, data_url, bsl_model=None):
     """ evaluating end2end model on dataurl
 
     Args:
@@ -69,7 +69,7 @@ def evaluate_e2e(model, data_url, bsl_model=None):
                 region_pred_count += len(pred_records)
 
                 for region in true_records:
-                    true_label = dataset.label_list.index(true_records[region])
+                    true_label = dataset.categories.index(true_records[region])
                     pred_label = pred_records[region] if region in pred_records else 0
                     region_true_list.append(true_label)
                     region_pred_list.append(pred_label)
@@ -90,7 +90,7 @@ def evaluate_e2e(model, data_url, bsl_model=None):
 
         print("region classification result:")
         print(classification_report(region_true_list, region_pred_list,
-                                    target_names=dataset.label_list, digits=6))
+                                    target_names=dataset.categories, digits=6))
         ret = dict()
         tp = 0
         for pv, tv in zip(region_pred_list, region_true_list):
@@ -103,12 +103,13 @@ def evaluate_e2e(model, data_url, bsl_model=None):
     return ret
 
 
-def predict(model, sentences, labels):
+def predict(model, sentences, categories, data_url):
     """ predict NER result for sentence list
     Args:
         model: trained model
         sentences: sentences to be predicted
-        labels: entity type list
+        categories: entity type list
+        data_url: url to data file to locate vocab files
 
     Returns:
         predicted results: ([sentence_labels], [region_labels], lengths)
@@ -132,7 +133,7 @@ def predict(model, sentences, labels):
                     if sent_labels[end - 1] == 0:
                         break
                     if pred_region_labels[ind] > 0:
-                        pred_records[(start, end)] =  labels[pred_region_labels[ind]]
+                        pred_records[(start, end)] =  categories[pred_region_labels[ind]]
                     ind += 1
         pred_sentence_records.append(pred_records)
 
@@ -161,7 +162,7 @@ def predict_on_iob2(model, iob_url):
             save_file.write("Gold records: {}\n".format(str(records)))
             try:
                 sentence_labels, sentence_records, length =\
-                    list(zip(*predict(model, [sentence], test_set.label_list)))[0]
+                    list(zip(*predict(model, [sentence], test_set.categories, iob_url)))[0]
             except RuntimeError as re:
                 sentence_labels, sentence_records, length = "None", "None", len(sentence)
             save_file.write("Pred binary labels: {}\n".format(str(sentence_labels)))
@@ -177,7 +178,7 @@ def main():
     model = torch.load(model_url)
     # model = torch.load(model_url, map_location='cpu')
     test_url = from_project_root("data/genia/genia.test.iob2")
-    evaluate_e2e(model, test_url)
+    evaluate(model, test_url)
     # predict_on_iob2(model, test_url)
     pass
 

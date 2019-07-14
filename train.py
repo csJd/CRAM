@@ -19,7 +19,7 @@ from utils.path_util import from_project_root, exists
 from utils.torch_util import get_device
 from dataset import End2EndDataset, prepare_vocab
 from model import End2EndModel
-from eval import evaluate_e2e
+from eval import evaluate
 
 MAX_REGION = 10
 EARLY_STOP = 5
@@ -147,7 +147,7 @@ def train_end2end(n_epochs=30,
 
         cnt += 1
         # evaluating model use development dataset or and additional test dataset
-        precision, recall, f1 = evaluate_e2e(model, dev_url, bsl_model).values()
+        precision, recall, f1 = evaluate(model, dev_url, bsl_model).values()
         if f1 > max_f1:
             max_f1, max_f1_epoch = f1, epoch
             name = 'split' if bsl_model else 'end2end'
@@ -172,7 +172,7 @@ def train_end2end(n_epochs=30,
         best_model = torch.load(best_model_url)
         print("best model url:", best_model_url)
         print("evaluating on test dataset:", test_url)
-        evaluate_e2e(best_model, test_url, bsl_model)
+        evaluate(best_model, test_url, bsl_model)
 
     print(arguments)
 

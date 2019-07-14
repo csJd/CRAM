@@ -20,11 +20,11 @@ class End2EndDataset(Dataset):
         self.data_url = data_url
         self.sentences, self.records = load_raw_data(data_url)
 
-        labels = set()
+        categories = set()
         for dic in self.records:
-            labels = labels.union(dic.values())
-        self.label_list = ['NA'] + sorted(labels)
-        self.n_tags = len(self.label_list)
+            categories = categories.union(dic.values())
+        self.categories = ['NA'] + sorted(categories)
+        self.n_tags = len(self.categories)
 
         self.device = device
         self.evaluating = evaluating
@@ -56,7 +56,7 @@ class End2EndDataset(Dataset):
                     for end in range(start + 1, length):
                         if labels[end - 1] == 0:
                             break
-                        region_labels.append(self.label_list.index(records[(start, end)]) if (start, end) in records else 0)
+                        region_labels.append(self.categories.index(records[(start, end)]) if (start, end) in records else 0)
 
         sentence_labels = torch.LongTensor(sentence_labels).to(self.device)
         region_labels = torch.LongTensor(region_labels).to(self.device)
