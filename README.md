@@ -1,13 +1,13 @@
-# Source code of Neural Multi-task Model for Nested NER
+# Source code of Candidate Region Aware Nested NER
 
 
 # Requirements
-* `python3`
-* `pytorch`
-* `numpy`
-* `gensim`
-* `scikit-learn`
-* `joblib`
+* `python 3.6.7`
+* `pytorch 1.0.0`
+* `numpy 1.15.3`
+* `gensim 3.6.0`
+* `scikit-learn 0.20.0`
+* `joblib 0.12.5`
 
 # Data Format
 Our processed `GENIA` dataset is in `./data/`.
